@@ -5,29 +5,22 @@
 //  Created by Zaid Neurothrone on 2022-10-21.
 //
 
-//import FirebaseAuth
 import Firebase
 import SwiftUI
 
 struct HomeScreen: View {
   @Binding var isAuthenticated: Bool
   
-//  @State private var allFruit: [String] = []
   @State private var allFruit: [Fruit] = []
   @State private var fruitName = ""
   
-  private let userID: String
-  private var ref: DatabaseReference! = Database.database().reference()
+  private let userCollection = "users"
   private let fruitCollection = "fruits"
+  private var ref: DatabaseReference! = Database.database().reference()
+  
   
   init(isAuthenticated: Binding<Bool>) {
     _isAuthenticated = isAuthenticated
-    
-    guard let userID = Auth.auth().currentUser?.uid else {
-      fatalError("❌ -> Failed to retrieve current user")
-    }
-    
-    self.userID = userID
   }
   
   var body: some View {
@@ -51,7 +44,7 @@ struct HomeScreen: View {
         .padding(.bottom)
         
         if allFruit.isEmpty {
-          Text("No fruits yet...")
+          Text("No fruit yet...")
         } else {
           List {
             ForEach(allFruit) { fruit in
@@ -73,38 +66,54 @@ struct HomeScreen: View {
 
 extension HomeScreen {
   private func addFruit() {
-    ref.child(fruitCollection).child(userID).childByAutoId().setValue(fruitName)
-    fetchFruit()
+    guard let userID = Auth.auth().currentUser?.uid else { return }
     
+    ref.child(userCollection)
+      .child(userID)
+      .child(fruitCollection)
+      .childByAutoId()
+      .setValue(fruitName)
+    
+    fetchFruit()
     fruitName = ""
   }
   
   private func fetchFruit() {
+    guard let userID = Auth.auth().currentUser?.uid else { return }
+    
     allFruit = []
     
-    ref.child(fruitCollection).child(userID).getData { error, snapshot in
-      if let error {
-        assertionFailure("❌ -> Failed to fetch fruit from Firebase. Error: \(error)")
-      }
-      
-      if let snapshot {
-        for fruit in snapshot.children {
-          let fruitSnap = fruit as! DataSnapshot
-          let fruitID = fruitSnap.key
-          let fruitName = fruitSnap.value as! String
-          
-          allFruit.append(Fruit(id: fruitID, name: fruitName))
+    ref.child(userCollection)
+      .child(userID)
+      .child(fruitCollection)
+      .getData { error, snapshot in
+        if let error {
+          assertionFailure("❌ -> Failed to fetch fruit from Firebase. Error: \(error)")
+        }
+        
+        if let snapshot {
+          for fruit in snapshot.children {
+            let fruitSnap = fruit as! DataSnapshot
+            let fruitID = fruitSnap.key
+            let fruitName = fruitSnap.value as! String
+            
+            allFruit.append(Fruit(id: fruitID, name: fruitName))
+          }
         }
       }
-    }
   }
   
   private func deleteFruit(atOffsets: IndexSet) {
-    guard let index = atOffsets.first else { return }
+    guard let index = atOffsets.first,
+          let userID = Auth.auth().currentUser?.uid
+    else { return }
     
     let fruitToDelete = allFruit[index]
     
-    ref.child(fruitCollection).child(userID).child(fruitToDelete.id)
+    ref.child(userCollection)
+      .child(userID)
+      .child(fruitCollection)
+      .child(fruitToDelete.id)
       .removeValue()
     
     allFruit.remove(at: index)
